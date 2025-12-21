@@ -1,16 +1,53 @@
-# smart_safety_app
+# Smart Safety App
 
-A new Flutter project.
+## Overview
+A comprehensive safety application designed to enhance personal security and emergency response through intelligent monitoring and real-time alerts.
 
-## Getting Started
+## Features
+- **Real-time Alerts**: Instant notifications for safety events
+- **Location Tracking**: GPS-based location monitoring
+- **Emergency Contacts**: Quick access to emergency services and trusted contacts
+- **Incident Logging**: Document and track safety incidents
+- **User Authentication**: Secure login and account management
 
-This project is a starting point for a Flutter application.
+## Installation
+```bash
+git clone <repository-url>
+cd smart_safety_app
+npm install
+```
 
-A few resources to get you started if this is your first Flutter project:
+## Usage
+```bash
+npm start
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Configuration
+Create a `.env` file in the project root:
+```
+API_KEY=your_api_key
+DATABASE_URL=your_database_url
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Project Structure
+```
+smart_safety_app/
+├── src/
+├── public/
+├── tests/
+├── README.md
+└── package.json
+```
+
+## Contributing
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a pull request
+
+## License
+MIT License
+
+## Support
+For issues and questions, please open an issue on GitHub.
