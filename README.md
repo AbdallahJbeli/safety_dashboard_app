@@ -1,53 +1,96 @@
-# Smart Safety App
+# Smart Safety Dashboard 🛡️
 
-## Overview
-A comprehensive safety application designed to enhance personal security and emergency response through intelligent monitoring and real-time alerts.
+[![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)](https://flutter.dev)
+[![Firebase](https://img.shields.io/badge/Firebase-039BE5?style=for-the-badge&logo=Firebase&logoColor=white)](https://firebase.google.com)
 
-## Features
-- **Real-time Alerts**: Instant notifications for safety events
-- **Location Tracking**: GPS-based location monitoring
-- **Emergency Contacts**: Quick access to emergency services and trusted contacts
-- **Incident Logging**: Document and track safety incidents
-- **User Authentication**: Secure login and account management
+A robust, real-time safety monitoring application designed to protect homes and workplaces. This app interfaces with IoT sensors to provide instant alerts and incident history for critical safety hazards like gas leaks, fire, and unauthorized entry.
 
-## Installation
-```bash
-git clone <repository-url>
-cd smart_safety_app
-npm install
+---
+
+## 🚀 Key Features
+
+- **Real-time Monitoring:** sub-second updates from Gas, Flame, Door, and Iron sensors.
+- **Intelligent Alert System:**
+  - **Visual:** Dashboard transitions from Green (Secure) to Red (Danger).
+  - **Haptic:** Immediate device vibration upon hazard detection.
+- **Multilingual Support:** Fully localized for **English, Arabic (RTL), and French**.
+- **Incident History:** Persistent logs of all past dangers with timestamps.
+- **Secure Access:** Authentication system ensuring only authorized members can access the dashboard.
+
+---
+
+## 🏗️ Hardware Integration & Architecture
+
+
+
+The application is designed to sync with hardware (ESP32/Arduino) using the following Firebase Realtime Database structure:
+
+```json
+{
+  "users": {
+    "USER_ID": {
+      "sensors": {
+        "gas": { "status": "off" },
+        "flame": { "status": "off" },
+        "door": { "status": "closed" },
+        "iron": { "status": "off" }
+      },
+      "logs": {
+        "unique_log_id": {
+          "sensor": "gas",
+          "timestamp": 1703175934000
+        }
+      }
+    }
+  }
+}
 ```
 
-## Usage
-```bash
-npm start
+## 🚀 Setup & Installation
+  1. Prerequisites
+   - Flutter SDK (Stable channel)
+   - Firebase account with a project created
+   - Dart installed
+
+  2. Clone the Repository
+   ```
+   git clone [https://github.com/AbdallahJbeli/safety_dashboard_app.git](https://github.com/AbdallahJbeli/safety_dashboard_app.git)
+
+   cd safety_dashboard_app 
+   
+   ```
+
+  3. Firebase Configuration
+   - Register App: Register your Android/iOS app in the Firebase Console.
+   - Config Files: 
+    - Place google-services.json in android/app/.
+    - Place GoogleService-Info.plist in ios/Runner/.
+   - Database URL: Ensure the dbUrl variable in your code points to: https://safetyapp-flutte-default-rtdb.europe-west1.firebasedatabase.app
+
+  4. Database Rules
+```json
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    }
+  }
+}
 ```
 
-## Configuration
-Create a `.env` file in the project root:
-```
-API_KEY=your_api_key
-DATABASE_URL=your_database_url
-```
+  5. Launch the App
+    # Get dependencies
+    flutter pub get
 
-## Project Structure
-```
-smart_safety_app/
-├── src/
-├── public/
-├── tests/
-├── README.md
-└── package.json
-```
+    # Setup Native Splash Screen
+    dart run flutter_native_splash:create
 
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a pull request
+    # Run the application
+    flutter run
 
-## License
-MIT License
 
-## Support
-For issues and questions, please open an issue on GitHub.
+``` 
+

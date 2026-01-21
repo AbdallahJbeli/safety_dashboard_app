@@ -36,6 +36,8 @@ final Map<String, Map<String, String>> translations = {
     'delete_msg': 'This will permanently delete all logs.',
     'cancel': 'Cancel',
     'delete': 'Delete',
+    'connected': 'SYSTEM CONNECTED',
+    'disconnected': 'SYSTEM DISCONNECTED',
   },
   'Arabic': {
     'title': 'لوحة تحكم السلامة',
@@ -62,6 +64,8 @@ final Map<String, Map<String, String>> translations = {
     'delete_msg': 'سيتم مسح جميع السجلات نهائياً.',
     'cancel': 'إلغاء',
     'delete': 'حذف',
+    'connected': 'النظام متصل',
+    'disconnected': 'النظام غير متصل',
   },
   'French': {
     'title': 'Tableau de Sécurité',
@@ -88,6 +92,8 @@ final Map<String, Map<String, String>> translations = {
     'delete_msg': 'Cela supprimera définitivement tous les journaux.',
     'cancel': 'Annuler',
     'delete': 'Supprimer',
+    'connected': 'SYSTÈME CONNECTÉ',
+    'disconnected': 'SYSTÈME DÉCONNECTÉ',
   },
 };
 
@@ -134,14 +140,11 @@ class _LoadingSplashScreenState extends State<LoadingSplashScreen> {
   }
 
   void _startApp() async {
-    // Give time for splash animation
     await Future.delayed(const Duration(seconds: 3));
     FlutterNativeSplash.remove();
 
     if (mounted) {
-      // CHECK AUTH STATE: If user is already logged in, skip to Dashboard
       User? user = FirebaseAuth.instance.currentUser;
-
       if (user != null) {
         Navigator.pushReplacement(
           context,
@@ -525,6 +528,41 @@ class _SensorDashboardState extends State<SensorDashboard> {
         ),
         body: Column(
           children: [
+            // STEP 1: Connection Status Banner
+            StreamBuilder<DatabaseEvent>(
+              stream: FirebaseDatabase.instance.ref('.info/connected').onValue,
+              builder: (context, snapshot) {
+                final bool connected =
+                    snapshot.data?.snapshot.value as bool? ?? false;
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  color: connected
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.red.withOpacity(0.1),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        connected ? Icons.check_circle : Icons.wifi_off_rounded,
+                        size: 14,
+                        color: connected ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        connected ? t['connected']! : t['disconnected']!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: connected ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
             StreamBuilder<DatabaseEvent>(
               stream: _dbRef.onValue,
               builder: (context, snapshot) {
