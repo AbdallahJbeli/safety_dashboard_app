@@ -6,18 +6,19 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:vibration/vibration.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const String dbUrl = "https://safetyapp-flutte-default-rtdb.europe-west1.firebasedatabase.app";
 
 final Map<String, Map<String, String>> translations = {
   'English': {
-    'title': 'Safety Dashboard',
+    'title': 'Safety Home',
     'secure': 'SYSTEM SECURE',
     'danger': 'DANGER DETECTED',
     'gas': 'Gas',
-    'temp': 'Temperature',
-    'door': 'Door',
-    'iron': 'Iron',
+    'flame': 'Flame', // Changed from temp
+    'door1': 'Door 1',
+    'door2': 'Door 2',
     'open': 'OPEN',
     'closed': 'CLOSED',
     'on': 'ON',
@@ -41,13 +42,13 @@ final Map<String, Map<String, String>> translations = {
     'battery': 'Battery Mode',
   },
   'Arabic': {
-    'title': 'لوحة تحكم السلامة',
+    'title': 'منزل السلامة',
     'secure': 'النظام آمن',
     'danger': 'تم اكتشاف خطر',
     'gas': 'غاز',
-    'temp': 'درجة الحرارة',
-    'door': 'الباب',
-    'iron': 'مكواة',
+    'flame': 'لهب', // Changed from temp
+    'door1': 'الباب 1',
+    'door2': 'الباب 2',
     'open': 'مفتوح',
     'closed': 'مغلق',
     'on': 'يعمل',
@@ -71,13 +72,13 @@ final Map<String, Map<String, String>> translations = {
     'battery': 'وضع البطارية',
   },
   'French': {
-    'title': 'Tableau de Sécurité',
+    'title': 'Accueil de Sécurité',
     'secure': 'SYSTÈME SÉCURISÉ',
     'danger': 'DANGER DÉTECTÉ',
     'gas': 'Gaz',
-    'temp': 'Température',
-    'door': 'Porte',
-    'iron': 'Fer à repasser',
+    'flame': 'Flamme', // Changed from temp
+    'door1': 'Porte 1',
+    'door2': 'Porte 2',
     'open': 'OUVERT',
     'closed': 'FERMÉ',
     'on': 'ALLUMÉ',
@@ -268,6 +269,28 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_email') ?? '';
+    final savedPassword = prefs.getString('saved_password') ?? '';
+    if (mounted) {
+      _emailController.text = savedEmail;
+      _passwordController.text = savedPassword;
+    }
+  }
+
+  Future<void> _saveCredentials(String email, String password) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_email', email);
+    await prefs.setString('saved_password', password);
+  }
+
   Future<void> _signIn() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -279,12 +302,20 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _loading = true);
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+      await _saveCredentials(email, password);
       if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SensorDashboard()));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -328,9 +359,8 @@ class _SensorDashboardState extends State<SensorDashboard> {
   late final DatabaseReference _dbRef;
   late final DatabaseReference _logRef;
   
-  // Track active alerts to prevent double logging. 
-  // For temp, we trigger if > 60°C.
-  final Map<String, bool> _activeAlerts = {'gas': false, 'temp': false, 'door': false, 'iron': false};
+  // Track active alerts to prevent double logging.
+  final Map<String, bool> _activeAlerts = {'gas': false, 'flame': false, 'door1': false, 'door2': false};
   final Color primaryBlue = const Color(0xFF2A6DEE), statusGreen = const Color(0xFF27AE60), statusRed = const Color(0xFFEB5757);
 
   @override
@@ -347,12 +377,8 @@ class _SensorDashboardState extends State<SensorDashboard> {
       if (value is Map) {
         bool isCurrentlyDanger = false;
 
-        // Special handling for Temperature (Numeric)
-        if (key == 'temp') {
-          double tempVal = double.tryParse(value['value'].toString()) ?? 0.0;
-          isCurrentlyDanger = tempVal > 60.0; // Threshold 60°C
-        } else if (value['status'] != null) {
-          // Standard ON/OFF logic for others
+        // Logic updated for digital statuses
+        if (value['status'] != null) {
           isCurrentlyDanger = value['status'] == 'on';
         }
 
@@ -393,59 +419,51 @@ class _SensorDashboardState extends State<SensorDashboard> {
         ),
         body: Column(
           children: [
-            // HARDWARE CONNECTION STATUS
+            // SYSTEM & POWER STATUS
             StreamBuilder<DatabaseEvent>(
               stream: _dbRef.child('online').onValue,
-              builder: (context, snapshot) {
-                final bool isSystemOn = snapshot.data?.snapshot.value as bool? ?? false;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  color: isSystemOn ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(isSystemOn ? Icons.power_rounded : Icons.power_off_rounded, size: 18, color: isSystemOn ? Colors.green : Colors.red),
-                      const SizedBox(width: 8),
-                      Text(isSystemOn ? t['connected']! : t['disconnected']!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSystemOn ? Colors.green.shade700 : Colors.red.shade700)),
-                    ],
-                  ),
-                );
-              },
-            ),
-
-            // POWER SOURCE STATUS
-            StreamBuilder<DatabaseEvent>(
-              stream: _dbRef.child('power').onValue,
-              builder: (context, snapshot) {
-                String source = "sector";
-                int level = 100;
-                if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-                  final pData = Map<dynamic, dynamic>.from(snapshot.data!.snapshot.value as Map);
-                  source = pData['source'] ?? "sector";
-                  level = pData['level'] ?? 100;
-                }
-                bool isBattery = source == "battery";
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isBattery ? Colors.orange.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: isBattery ? Colors.orange : Colors.blue, width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(isBattery ? Icons.battery_alert_rounded : Icons.power_rounded, color: isBattery ? Colors.orange : Colors.blue),
-                      const SizedBox(width: 15),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(isBattery ? t['battery']! : t['sector']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        if (isBattery) Text("Charge: $level%", style: const TextStyle(fontSize: 12)),
-                      ])),
-                      if (isBattery) SizedBox(width: 40, height: 40, child: CircularProgressIndicator(value: level / 100, strokeWidth: 3, backgroundColor: Colors.grey.shade300, color: level < 20 ? Colors.red : Colors.orange))
-                    ],
-                  ),
+              builder: (context, snapshot1) {
+                final bool isSystemOn = snapshot1.data?.snapshot.value as bool? ?? false;
+                
+                return StreamBuilder<DatabaseEvent>(
+                  stream: _dbRef.child('power').onValue,
+                  builder: (context, snapshot2) {
+                    String source = "sector";
+                    int level = 100;
+                    if (snapshot2.hasData && snapshot2.data!.snapshot.value != null) {
+                      final pData = Map<dynamic, dynamic>.from(snapshot2.data!.snapshot.value as Map);
+                      source = pData['source'] ?? "sector";
+                      level = pData['level'] ?? 100;
+                    }
+                    bool isBattery = source == "battery";
+                    
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSystemOn ? Colors.blue.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: isSystemOn ? Colors.blue : Colors.red, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(isSystemOn ? Icons.power_rounded : Icons.power_off_rounded, size: 20, color: isSystemOn ? Colors.blue : Colors.red),
+                          const SizedBox(width: 12),
+                          Text(isSystemOn ? t['connected']! : t['disconnected']!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSystemOn ? Colors.blue.shade700 : Colors.red.shade700)),
+                          if (isBattery) ...[
+                            const SizedBox(width: 20),
+                            Icon(Icons.battery_alert_rounded, size: 20, color: Colors.orange),
+                            const SizedBox(width: 8),
+                            Text("$level%", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade700)),
+                          ] else ...[
+                            const SizedBox(width: 20),
+                            Text(t['sector']!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700)),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -458,15 +476,9 @@ class _SensorDashboardState extends State<SensorDashboard> {
                 if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
                   final data = snapshot.data!.snapshot.value as Map;
                   
-                  // Danger logic: check if any standard sensor is 'on' OR temp > 60
                   isDanger = data.entries.any((entry) {
-                    final key = entry.key.toString();
                     final val = entry.value;
                     if (val is! Map) return false;
-                    
-                    if (key == 'temp') {
-                      return (double.tryParse(val['value'].toString()) ?? 0.0) > 60.0;
-                    }
                     return val['status'] == 'on';
                   });
 
@@ -489,18 +501,23 @@ class _SensorDashboardState extends State<SensorDashboard> {
 
             // SENSOR GRID
             Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                padding: const EdgeInsets.all(20),
-                mainAxisSpacing: 15,
-                crossAxisSpacing: 15,
-                childAspectRatio: 0.9,
-                children: [
-                  sensorGridCard(t['gas']!, 'gas', Icons.gas_meter_rounded, false),
-                  sensorGridCard(t['temp']!, 'temp', Icons.thermostat_rounded, true),
-                  sensorGridCard(t['door']!, 'door', Icons.door_sliding_rounded, false),
-                  sensorGridCard(t['iron']!, 'iron', Icons.iron_rounded, false),
-                ],
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: sensorGridCard(t['gas']!, 'gas', Icons.gas_meter_rounded)),
+                          const SizedBox(width: 15),
+                          Expanded(child: sensorGridCard(t['flame']!, 'flame', Icons.local_fire_department_rounded)),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      doorsCombinedCard(),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -509,36 +526,95 @@ class _SensorDashboardState extends State<SensorDashboard> {
     );
   }
 
-  Widget sensorGridCard(String name, String sensorKey, IconData icon, bool isAnalog) {
+  Widget doorsCombinedCard() {
+    var t = translations[currentLang]!;
     return StreamBuilder<DatabaseEvent>(
-      stream: _dbRef.child(sensorKey).onValue,
+      stream: _dbRef.onValue,
       builder: (context, snapshot) {
-        bool isWarning = false;
-        String displayVal = "";
-
+        bool door1Warning = false;
+        bool door2Warning = false;
+        
         if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-          final data = Map<String, dynamic>.from(snapshot.data!.snapshot.value as Map);
-          if (isAnalog) {
-            double val = double.tryParse(data['value'].toString()) ?? 0.0;
-            displayVal = "${val.toStringAsFixed(1)}°C";
-            isWarning = val > 60.0;
-          } else {
-            isWarning = data['status'] == 'on';
-          }
+          final data = snapshot.data!.snapshot.value as Map;
+          if (data['door1'] is Map) door1Warning = data['door1']['status'] == 'on';
+          if (data['door2'] is Map) door2Warning = data['door2']['status'] == 'on';
         }
-        return sensorUI(name, icon, isWarning, displayVal);
+        
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(25),
+            boxShadow: [BoxShadow(color: (door1Warning || door2Warning) ? statusRed.withOpacity(0.15) : Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8))],
+            border: Border.all(color: (door1Warning || door2Warning) ? statusRed.withOpacity(0.3) : Colors.transparent, width: 2),
+          ),
+          child: Column(
+            children: [
+              Text('Doors', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: door1Warning ? statusRed.withOpacity(0.1) : primaryBlue.withOpacity(0.05), shape: BoxShape.circle), child: Icon(Icons.door_sliding_rounded, color: door1Warning ? statusRed : primaryBlue, size: 28)),
+                        const SizedBox(height: 8),
+                        Text(t['door1']!, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: door1Warning ? statusRed : statusGreen, borderRadius: BorderRadius.circular(20)),
+                          child: Text(door1Warning ? t['open']! : t['closed']!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: door2Warning ? statusRed.withOpacity(0.1) : primaryBlue.withOpacity(0.05), shape: BoxShape.circle), child: Icon(Icons.door_sliding_rounded, color: door2Warning ? statusRed : primaryBlue, size: 28)),
+                        const SizedBox(height: 8),
+                        Text(t['door2']!, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: door2Warning ? statusRed : statusGreen, borderRadius: BorderRadius.circular(20)),
+                          child: Text(door2Warning ? t['open']! : t['closed']!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
       },
     );
   }
 
-  Widget sensorUI(String name, IconData icon, bool isWarning, String analogValue) {
+  Widget sensorGridCard(String name, String sensorKey, IconData icon) {
+    return StreamBuilder<DatabaseEvent>(
+      stream: _dbRef.child(sensorKey).onValue,
+      builder: (context, snapshot) {
+        bool isWarning = false;
+        if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+          final data = Map<String, dynamic>.from(snapshot.data!.snapshot.value as Map);
+          isWarning = data['status'] == 'on';
+        }
+        return sensorUI(name, icon, isWarning);
+      },
+    );
+  }
+
+  Widget sensorUI(String name, IconData icon, bool isWarning) {
     var t = translations[currentLang]!;
     
-    // Logic for the text inside the colored pill
     String pillText;
-    if (analogValue.isNotEmpty) {
-      pillText = analogValue;
-    } else if (name == t['door']) {
+    if (name == t['door1'] || name == t['door2']) {
       pillText = isWarning ? t['open']! : t['closed']!;
     } else {
       pillText = isWarning ? t['on']! : t['off']!;
@@ -606,14 +682,13 @@ class HistoryPage extends StatelessWidget {
                 final log = logs[index];
                 final date = DateTime.fromMillisecondsSinceEpoch(log['timestamp']);
                 String sensorNameKey = log['sensor'] ?? 'unknown';
-                String valueInfo = log['value'] != null ? " (${log['value']})" : "";
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   child: ListTile(
                     leading: const CircleAvatar(backgroundColor: Color(0xFFEB5757), child: Icon(Icons.warning, color: Colors.white)),
-                    title: Text("${t['danger']}: ${t[sensorNameKey] ?? sensorNameKey}$valueInfo", style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text("${t['danger']}: ${t[sensorNameKey] ?? sensorNameKey}", style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text("${date.day}/${date.month}/${date.year} - ${date.hour}:${date.minute.toString().padLeft(2, '0')}"),
                   ),
                 );
