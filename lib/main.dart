@@ -105,8 +105,11 @@ final Map<String, Map<String, String>> translations = {
 
 String currentLang = 'English';
 
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  print('🔔 Background message: ${message.notification?.title}');
+
 }
 
 void main() async {
@@ -114,7 +117,46 @@ void main() async {
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  _setupFCM();
   runApp(const MyApp());
+}
+
+Future<void> _setupFCM() async {
+  final messaging = FirebaseMessaging.instance;
+  
+  // Request permission (iOS + Android 13+)
+  NotificationSettings settings = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+    criticalAlert: true, // ✅ Important for danger alerts!
+  );
+  
+  print('✅ Permission status: ${settings.authorizationStatus}');
+  
+  // Get FCM token and print it (we'll need this for testing)
+  String? token = await messaging.getToken();
+  print('🔑 FCM Token: $token');
+  
+  // ✅ Save token to Firebase Realtime Database so backend can use it
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null && token != null) {
+    await FirebaseDatabase.instance
+        .ref('users/${user.uid}/fcmToken')
+        .set(token);
+  }
+  
+  // Handle foreground messages
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print('📱 Foreground notification: ${message.notification?.title}');
+    // Optional: Show local notification here if needed
+  });
+  
+  // Handle tapped notifications
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    print('👆 Tapped notification: ${message.notification?.title}');
+    // Optional: Navigate to danger screen
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -146,18 +188,27 @@ class _LoadingSplashScreenState extends State<LoadingSplashScreen> {
     _startApp();
   }
 
-  void _startApp() async {
-    await Future.delayed(const Duration(seconds: 3));
+void _startApp() async {
+  await Future.delayed(const Duration(seconds: 2));
+
+  FirebaseAuth.instance.authStateChanges().listen((user) {
     FlutterNativeSplash.remove();
-    if (mounted) {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SensorDashboard()));
-      } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LanguageSelectionPage()));
-      }
+
+    if (!mounted) return;
+
+    if (user != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SensorDashboard()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LanguageSelectionPage()),
+      );
     }
-  }
+  });
+}
 
   @override
   Widget build(BuildContext context) {
